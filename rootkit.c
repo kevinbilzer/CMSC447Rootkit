@@ -3,10 +3,6 @@
 #include <linux/kernel.h>
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Robert W. Oliver II");
-MODULE_DESCRIPTION("A simple example Linux module.");
-MODULE_VERSION("0.01");
-
 
 static int __init rootkit_init(void) {
     printk(KERN_INFO "Loaded kernel module");

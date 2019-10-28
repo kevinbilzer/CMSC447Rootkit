@@ -4,3 +4,4 @@
 *.ko
 *.symvers
 *.order
+*.cmd
