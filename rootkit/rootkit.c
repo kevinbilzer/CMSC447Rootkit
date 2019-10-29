@@ -4,6 +4,7 @@
 
 MODULE_LICENSE("GPL");
 
+//
 static int __init rootkit_init(void) {
     printk(KERN_INFO "Loaded kernel module");
     return 0;
