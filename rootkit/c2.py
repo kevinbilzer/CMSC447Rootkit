@@ -48,9 +48,6 @@ def unconvertTLV():
 def encrypt():
     return "Encrypting the message..."
 
-def decrypt():
-    return "Decrypting the message..."
-
 def send():
     return "Sending data..."
 
