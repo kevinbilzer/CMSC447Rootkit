@@ -67,9 +67,11 @@ def numbers_to_menu_options(choice):
     func = switcher.get(choice, lambda: "Invalid Choice")
     print(func)
 
-while True:
-    printMenu()    
-    i = int(input("Enter menu choice 1 - 4: "))
-    numbers_to_menu_options(i)
-    if i == 3 or i == 4:
-        break
+
+if __name__ == "__main__":
+    while True:
+        printMenu()    
+        i = int(input("Enter menu choice 1 - 4: "))
+        numbers_to_menu_options(i)
+        if i == 3 or i == 4:
+            break
