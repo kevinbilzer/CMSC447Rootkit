@@ -11,8 +11,6 @@ print("entering while")
 while True:
     c, addr = s.accept()
     print('got connection from ' + str(addr))
-    print("recving data")
-    print(c.recv(13))
     print("sending data")
     c.sendall(b'aa')
     print("closing connection")
