@@ -1,4 +1,5 @@
 *.swp*
+*.mod*
 *.swo*
 *.o
 *.ko
