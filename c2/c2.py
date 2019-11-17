@@ -9,8 +9,15 @@ Linux Rootkit Project
 C2 Command Line Interface
 """
 
-def execute():
-    return "This will execute a command"
+def encrypt(message, key):
+    byte_list = [bytes(message[i:i+4]) for i in range(0, len(message)-3, 4)]
+    int_list = [int.from_bytes(byte_list[i]) for i in range(len(byte_list))]
+
+    for i in range(len(int_list)):
+        int_list[i] ^= int.from_bytes(key)
+        byte_list[i] = int_list[i].to_bytes(4)
+
+    return b''.join(byte_list)
 
 def gather():
     return "This will gather keylogged commands"

@@ -23,10 +23,20 @@ static enum data_operation {
   RECV = 2
 };
 
+static uint8_t* encrypt(const uint8_t* msg, unsigned int msg_len, const uint8_t* key, unsigned int key_len) {
+  unsigned int i;
+  uint8_t* encrypted = (uint8_t*) kmalloc(msg_len + 1, GFP_KERNEL);
+  memset(encrypted, 0, msg_len + 1);
+  for (i = 0; i < msg_len; i++) {
+    encrypted[i] = msg[i] ^ key[i % key_len];
+  }
+
+  return encrypted;
+}
+
 static int do_data_transfer(char * buffer, size_t length, int operation) {
   struct msghdr msg;
   struct kvec vec;
-  size_t bytes_sent;
   // send code stub
   msg.msg_name = 0;
   msg.msg_namelen = 0;
